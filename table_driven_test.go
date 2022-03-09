@@ -36,48 +36,63 @@ func (st *StubType) Read(p []byte) (n int, err error) {
 }
 
 func TestMultipleReader(t *testing.T) {
-	type testCases struct {
-		description string
-		currReqPool int
-		wg          *sync.WaitGroup
-		st          *StubType
-	}
-
-	for _, s := range []*testCases{
-		{
-			description: "request number is less than the request limit of type",
-			currReqPool: RequestLimit - 50,
-			wg:          &sync.WaitGroup{},
-			st:          &StubType{reqCounter: RequestLimit, response: "my-dummy-response"},
-		},
-		{
-			description: "request number is equal the request limit of type",
-			currReqPool: RequestLimit,
-			wg:          &sync.WaitGroup{},
-			st:          &StubType{reqCounter: RequestLimit, response: "my-dummy-response"},
-		},
-		{
-			description: "request number is more than the request limit of type",
-			currReqPool: RequestLimit + 50,
-			wg:          &sync.WaitGroup{},
-			st:          &StubType{reqCounter: RequestLimit, response: "my-dummy-response"},
-		},
+	for scenario, fn := range map[string]func(t *testing.T){
+		"less than request limit": TestLessThanRequestLimit,
+		"equal to request limit":  TestEqualToRequestLimit,
+		"more than request limit": TestEqualToRequestLimit,
 	} {
-		t.Run("concurrent access to reader", func(t *testing.T) {
-			s.wg.Add(s.currReqPool)
-			for i := 0; i < s.currReqPool; i++ {
-				go func(i int) {
-					var resp []byte
-					if _, err := s.st.Read(resp); err != nil {
-						assertNotEqualRequestLimit(t, s.st, RequestLimit, s.wg)
-					} else {
-						s.wg.Done()
-					}
-				}(i)
-			}
-			s.wg.Wait()
+		t.Run(scenario, func(t *testing.T) {
+			fn(t)
 		})
 	}
+}
+
+func testMultipleReader(t *testing.T, tt testTpe) {
+	tt.wg.Add(tt.currReqPool)
+	for i := 0; i < tt.currReqPool; i++ {
+		go func(i int) {
+			var resp []byte
+			if _, err := tt.st.Read(resp); err != nil {
+				assertNotEqualRequestLimit(t, tt.st, RequestLimit, tt.wg)
+			} else {
+				tt.wg.Done()
+			}
+		}(i)
+	}
+	tt.wg.Wait()
+}
+
+type testTpe struct {
+	currReqPool int
+	wg          *sync.WaitGroup
+	st          *StubType
+}
+
+func TestLessThanRequestLimit(t *testing.T) {
+	tt := testTpe{
+		currReqPool: RequestLimit - 50,
+		wg:          &sync.WaitGroup{},
+		st:          &StubType{reqCounter: RequestLimit, response: "my-dummy-response"},
+	}
+	testMultipleReader(t, tt)
+}
+
+func TestEqualToRequestLimit(t *testing.T) {
+	tt := testTpe{
+		currReqPool: RequestLimit,
+		wg:          &sync.WaitGroup{},
+		st:          &StubType{reqCounter: RequestLimit, response: "my-dummy-response"},
+	}
+	testMultipleReader(t, tt)
+}
+
+func TestMoreThanRequestLimit(t *testing.T) {
+	tt := testTpe{
+		currReqPool: RequestLimit + 50,
+		wg:          &sync.WaitGroup{},
+		st:          &StubType{reqCounter: RequestLimit, response: "my-dummy-response"},
+	}
+	testMultipleReader(t, tt)
 }
 
 func assertNotEqualRequestLimit(t *testing.T, got *StubType, want int, wg *sync.WaitGroup) {

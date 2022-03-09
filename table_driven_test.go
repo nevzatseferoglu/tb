@@ -24,7 +24,7 @@ type StubType struct {
 const RequestLimit = 100
 
 func (st *StubType) Read(p []byte) (n int, err error) {
-	if st.reqCounter == st.reqCounter {
+	if st.reqCounter == RequestLimit {
 		err = &RequestLimitExceeded{limit: RequestLimit}
 		return
 	}
